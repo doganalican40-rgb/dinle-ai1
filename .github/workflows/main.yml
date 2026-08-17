@@ -1,0 +1,71 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Repoyu Cek
+        uses: actions/checkout@v4
+
+      - name: ZIP Cikar
+        run: |
+          if [ -f "DinleAI-Android-Fixed.zip" ]; then
+            unzip -o DinleAI-Android-Fixed.zip -d .
+          fi
+
+      - name: Node.js Kur
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Ortam Degiskenlerini (.env) Olustur
+        run: |
+          cd dinlefix
+          cat << EOF > .env
+          LIVEAVATAR_API_KEY=${{ secrets.LIVEAVATAR_API_KEY }}
+          LIVEAVATAR_AVATAR_ID=${{ secrets.LIVEAVATAR_AVATAR_ID }}
+          LIVEAVATAR_CONTEXT_ID=${{ secrets.LIVEAVATAR_CONTEXT_ID }}
+          EOF
+
+      - name: Bagimliliklari Yukle
+        run: |
+          cd dinlefix
+          npm install --legacy-peer-deps
+
+      - name: Web Uygulamasini Derle
+        run: |
+          cd dinlefix
+          npm run build
+
+      - name: Asset Senkronizasyonu ve Yol Duzeltme
+        run: |
+          cd dinlefix
+          node scripts/sync-android-assets.mjs || true
+
+      - name: Java Kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: APK Derle ve Versiyonu Yükselt
+        run: |
+          cd dinlefix/android
+          # Telefonun uygulamayı silmeden güncelleme olarak görebilmesi için versionCode yükseltiliyor
+          sed -i 's/versionCode 1/versionCode 2/g' app/build.gradle || true
+          chmod +x gradlew || true
+          ./gradlew assembleDebug || gradle assembleDebug
+
+      - name: APK Dosyasini Yukle
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: dinlefix/android/app/build/outputs/apk/debug/app-debug.apk
+          overwrite: true
+          
